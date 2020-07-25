@@ -1,5 +1,5 @@
 mod opcode;
-mod parser_atom;
+pub mod parser_atom;
 fn main() {
     println!("Hello, world!");
 }

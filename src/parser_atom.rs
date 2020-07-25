@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
 #[allow(non_snake_case)]
-enum JSParserAtom {
+pub enum JSParserAtom {
     JsParserAtom_null,
     JsParserAtom_false,
     JsParserAtom_true,
@@ -490,5 +490,15 @@ impl std::fmt::Display for JSParserAtom {
             JSParserAtom_Symbol_unscopables => write!(f, "Symbol.unscopables"),
             JSParserAtom_Symbol_asyncIterator => write!(f, "Symbol.asyncIterator"),
         }
+    }
+}
+
+
+mod test{
+    #[test]
+    fn test_js_parser_atom_to_string(){
+        use crate::parser_atom::JSParserAtom;
+        let atom = JSParserAtom::JsParserAtom_null;
+        assert!(atom.to_string() == "null");
     }
 }
