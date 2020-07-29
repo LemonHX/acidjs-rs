@@ -1,3 +1,11 @@
+use std::os::raw::c_void;
+
+#[cfg(target_arch = "x86_64")]
+type uintptr_t = u64;
+
+#[cfg(not(target_arch = "x86_64"))]
+type uintptr_t = u32;
+
 enum JSGCPhaseEnum {
     JS_GC_PHASE_NONE,
     JS_GC_PHASE_DECREF,
@@ -26,6 +34,34 @@ pub struct JSObject {
     pub shape: *mut JSShape,
     pub prop: *mut JSProperty,
     pub first_weak_ref: *mut JSMapRecord,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct JSProperty {
+    pub u: JSPropertyUnion,
+}
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub union JSPropertyUnion {
+    pub value: JSValue,
+    pub getset: JSPropertyGetSet,
+    pub var_ref: *mut JSVarRef,
+    pub init: JSPropertyInit,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct JSPropertyInit {
+    pub realm_and_id: uintptr_t,
+    pub opaque: *mut c_void,
+}
+
+#[derive(Copy, Clone)]
+#[repr(C)]
+pub struct JSPropertyGetSet {
+    pub getter: *mut JSObject,
+    pub setter: *mut JSObject,
 }
 
 #[derive(Copy, Clone)]
@@ -64,7 +100,7 @@ pub struct JSString {
     pub hash: u32,
     pub atom_type: JSAtomType,
     pub hash_next: u32,
-    pub u: Terminator,
+    pub u: JSStringTerminatorUnion,
 }
 
 #[derive(Copy, Clone)]
@@ -75,7 +111,7 @@ pub struct JSRefCountHeader {
 
 #[derive(Copy, Clone)]
 #[repr(C)]
-pub union Terminator {
+pub union JSStringTerminatorUnion {
     pub str8: [u8; 0],
     pub str16: [u16; 0],
 }
