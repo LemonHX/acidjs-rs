@@ -20,11 +20,74 @@ enum JSAsyncGeneratorState {
     COMPLETED,
 }
 
+struct JSBoundFunction{
+    func_obj:JSValue,
+    this:JSValue,
+    argc:u32,
+    args:Vec<JSValue>
+}
+
+//FIXME: 暂时应付编译器的
+type JSCFunction= u32;
+type JSCFunctionMagic = u32;
+type JSCFunctionData = u32;
+struct JSCFunctionDataRecord{
+    func: JSCFunctionData,
+    len:u8,
+    magic:u16,
+    //TODO: use vec
+    data_len:u8,
+    data:*mut JSValue
+}
+
+struct JSForInIterator{
+    obj: JSValue,
+    is_arr:bool,
+    len:u32,
+    idx:u32
+}
+
+enum JSClassVariant{
+    Opaque(*mut u8),
+    BoundFunction(*mut JSBoundFunction),
+    CFunctionData(*mut JSCFunctionDataRecord),
+    ForInIter(*mut JSForInIterator),
+    ArrayBuffer(*mut JSArrayBuffer),
+    TypedArray(*mut TypedArray),
+    MapState(*mut JSMapState),
+    MapIter(*mut JSMapIterData),
+    RegexStringIter(*mut JSRegexStringIterData),
+    Generator(*mut JSGeneratorData),
+    Proxy(*mut JSProxyData),
+    Promise(*mut JSPromiseData),
+    PromiseFunc(*mut JSPromiseFunctionData),
+    AsyncFunc(*mut JSAsyncFunctionData),
+    AsyncFromSyncIter(*mut JSAsyncFromSyncIterData),
+    AsyncGenerator(*mut JSAsyncGeneratorData),
+    BytecodeFunction(*mut JSFunctionBytecode,*mut*mut JSVarRef,*mut JSObject),
+    CFunction(*mut JSContext,JSCFunctionType,u8,u8,u16),
+    ClassArrayOrArgs(*mut JSValue, u32),
+    Regex(JSRegex),
+
+    Value(JSValue),
+    
+    RawArr(),
+    I8Arr(),
+    U8Arr(),
+    I16Arr(),
+    U16Arr(),
+    I32Arr(),
+    U32Arr(),
+    I64Arr(),
+    U64Arr(),
+    F32Arr(),
+    F64Arr(),
+}
 // #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct JSObject {
     pub shape: *mut JSShape,
-    // pub prop: *mut JSProperty,
+    pub prop: *mut JSProperty,
     // pub first_weak_ref: *mut JSMapRecord,
 }
 
@@ -93,7 +156,7 @@ pub enum JSGCObjectType {
     JS_CONTEXT,
 }
 
-enum JSVarRefStatus{
+enum JSVarRefStatus {
     OnStack(u16),
     Detached,
 }
@@ -118,20 +181,20 @@ pub struct ListHead {
     pub next: *mut ListHead,
 }
 
-pub enum JSValue{
+pub enum JSValue {
     Int(i32),
     Float(f64),
-    Ptr(*mut std::ffi::c_void)
+    Ptr(*mut std::ffi::c_void),
 }
 
 //TODO: enum prob is better
-struct JSVarRef{
-    header : JSGCObjectHeader,
+struct JSVarRef {
+    header: JSGCObjectHeader,
     pvalue: *const JSValue,
     value: JSValue,
 }
 
-enum JSAutoInitID{
+enum JSAutoInitID {
     PROTOTYPE,
     MODULE_NS,
     PROP,
@@ -193,13 +256,11 @@ pub struct JSRuntime {
     // TODO: vec
     // pub atom_hash: *mut u32,
     // pub atom_array: *mut *mut JSAtomStruct,
-
     pub atom_free_index: u32,
-    
+
     // TODO: vec
     // pub class_count: u32,
     // pub class_array: *mut JSClass,
-    
     pub context_list: ListHead,
     pub gc_obj_list: ListHead,
     pub gc_zero_ref_count_list: ListHead,
@@ -231,7 +292,7 @@ pub struct JSRuntime {
     pub user_opaque: *mut std::ffi::c_void,
 }
 
-#[derive(Copy, Clone)]
+// #[derive(Copy, Clone)]
 #[repr(C)]
 pub struct JSClass {
     //TODO: JS_CLASS_XXX
@@ -244,7 +305,7 @@ pub struct JSClass {
     // pub exotic: *const JSClassExoticMethods,
 }
 
-pub enum JSMode{
+pub enum JSMode {
     // C functions also use Default
     Default = 0,
     Strict,
@@ -270,37 +331,37 @@ pub struct JSStackFrame {
     pub cur_sp: *mut JSValue,
 }
 
-struct JSClosureVar{
-    is_local:bool,
-    is_arg:bool,
-    is_const:bool,
-    is_lexial:bool,
-    var_kind:JSVarKind,
+struct JSClosureVar {
+    is_local: bool,
+    is_arg: bool,
+    is_const: bool,
+    is_lexial: bool,
+    var_kind: JSVarKind,
     // TODO: Closure type, this only used if is local
     var_idx: u16,
     var_name: JSAtom,
 }
 
-struct JSVarScope{
+struct JSVarScope {
     parent: u32,
-    first: u32
+    first: u32,
 }
 
-enum JSVarKind{
+enum JSVarKind {
     /* XXX: add more variable kinds here instead of using bit fields */
     NORMAL,
     FUNCTION_DECL, /* lexical var with function declaration */
     NEW_FUNCTION_DECL, /* lexical var with async/generator
-                                 function declaration */
+                   function declaration */
     CATCH,
     PRIVATE_FIELD,
     PRIVATE_METHOD,
     PRIVATE_GETTER,
-    PRIVATE_SETTER, /* must come after PRIVATE_GETTER */
+    PRIVATE_SETTER,        /* must come after PRIVATE_GETTER */
     PRIVATE_GETTER_SETTER, /* must come after PRIVATE_SETTER */
 }
 
-struct JSVarDef{
+struct JSVarDef {
     name: JSAtom,
     scope_level: u32,
     scope_next: u32,
@@ -308,59 +369,108 @@ struct JSVarDef{
     is_func_var: bool,
     is_const: bool,
     is_lexial: bool,
-    is_captured:bool,
+    is_captured: bool,
     kind: JSVarKind,
     // only use in compilation
-    func_pool_or_scope_idx:u32,
+    func_pool_or_scope_idx: u32,
 }
 
-enum JSFuncKind{
+enum JSFuncKind {
     Normal,
     Generator,
     Async,
-    AsyncGenerator
+    AsyncGenerator,
 }
 
-struct JSFunctionBytecodeDebugInfo{
-    filename:String,
-    line_number:u64,
+struct JSFunctionBytecodeDebugInfo {
+    filename: String,
+    line_number: u64,
     source_len: u64,
     //TODO: use vec
-    pc2line_len:u64,
-    pc2line_buf:*mut u8,
-    source:String
+    pc2line_len: u64,
+    pc2line_buf: *mut u8,
+    source: String,
 }
 
-struct JSFunctionBytecode{
-header:JSGCObjectHeader,
-mode:JSMode,
-has_proto:bool,
-has_simple_param_list:bool,
-is_derived_class_constructor:bool,
-need_home_object:bool,
-func_kind:JSFuncKind,
-new_target_allowed:bool,
-super_call_allowed:bool,
-arguments_allowed:bool,
-has_debug:bool,
-backtrace_barrier:bool,
-read_only_bytecode:bool,
-// TODO: vec
-byte_code_buf:*mut u8,
-byte_code_len:u32,
+struct JSFunctionBytecode {
+    header: JSGCObjectHeader,
+    mode: JSMode,
+    has_proto: bool,
+    has_simple_param_list: bool,
+    is_derived_class_constructor: bool,
+    need_home_object: bool,
+    func_kind: JSFuncKind,
+    new_target_allowed: bool,
+    super_call_allowed: bool,
+    arguments_allowed: bool,
+    has_debug: bool,
+    backtrace_barrier: bool,
+    read_only_bytecode: bool,
+    // TODO: vec
+    byte_code_buf: *mut u8,
+    byte_code_len: u32,
 
-func_name:JSAtom,
-// TODO: all use vec!
-var_defs:*mut JSVarDef,
-closure_vars:*mut JSClosureVar,
-closure_vars_count:u32,
-arg_count:u16,
-var_count:u16,
-defined_arg_count:u16,
-stack_size:u16,
-realm : JSContext,
-constant_pool:*mut JSValue,
-cpool_count:u32,
+    func_name: JSAtom,
+    // TODO: all use vec!
+    var_defs: *mut JSVarDef,
+    closure_vars: *mut JSClosureVar,
+    closure_vars_count: u32,
+    arg_count: u16,
+    var_count: u16,
+    defined_arg_count: u16,
+    stack_size: u16,
+    realm: JSContext,
+    constant_pool: *mut JSValue,
+    cpool_count: u32,
 
-debug_info: JSFunctionBytecodeDebugInfo
+    debug_info: JSFunctionBytecodeDebugInfo,
+}
+
+pub struct JSModuleDef {
+    pub header: JSRefCountHeader,
+    pub module_name: JSAtom,
+    pub link: list_head,
+    pub req_module_entries: *mut JSReqModuleEntry,
+    pub req_module_entries_count: u32,
+    pub req_module_entries_size: u32,
+    pub export_entries: *mut JSExportEntry,
+    pub export_entries_count: u32,
+    pub export_entries_size: u32,
+    pub star_export_entries: *mut JSStarExportEntry,
+    pub star_export_entries_count: u32,
+    pub star_export_entries_size: u32,
+    pub import_entries: *mut JSImportEntry,
+    pub import_entries_count: u32,
+    pub import_entries_size: u32,
+    pub module_ns: JSValue,
+    pub func_obj: JSValue,
+    // TODO: impl
+    // pub init_func: Option<JSModuleInitFunc>,
+    resolved: bool,
+    func_created: bool,
+    instantiated: bool,
+    evaluated: bool,
+    eval_mark: bool,
+    
+    eval_exception: Option<JSValue>,
+    // #[bitfield(name = "resolved", ty = "u32", bits = "0..=7")]
+    // #[bitfield(name = "func_created", ty = "u32", bits = "8..=15")]
+    // #[bitfield(name = "instantiated", ty = "u32", bits = "16..=23")]
+    // #[bitfield(name = "evaluated", ty = "u32", bits = "24..=31")]
+    // #[bitfield(name = "eval_mark", ty = "u32", bits = "32..=39")]
+    // #[bitfield(name = "eval_has_exception", ty = "u32", bits =
+    //            "40..=47")]
+    // pub resolved_func_created_instantiated_evaluated_eval_mark_eval_has_exception: [u8; 6],
+    // #[bitfield(padding)]
+    // pub c2rust_padding: [u8; 2],
+    // pub eval_exception: JSValue,
+    pub meta_obj: JSValue,
+}
+
+enum JSProperty{
+    Normal(JSValue),
+    GetterSetter(JSObject,JSObject),
+    VarRef(JSVarRef),
+    // realm and init_id , opaque
+    AutoInit(u64,*mut u8)
 }
